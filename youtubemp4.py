@@ -1,47 +1,75 @@
 import os
+from flask import Flask, render_template, request, redirect, url_for, flash
 import yt_dlp
 
-def download_video(video_url, download_path='.'):
-    """Download the highest quality video from YouTube using yt-dlp."""
+app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # Required for flashing messages
+
+
+# Audio download function
+def download_audio(video_url, download_path='.'):
     try:
-        # Create download path if it does not exist
         os.makedirs(download_path, exist_ok=True)
 
-        # Define download options
         ydl_opts = {
-            'format': 'best[ext=mp4]',  # Download the best available format that is mp4 (which combines audio and video)
-            'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),  # Output template
-            'noplaylist': True,  # Ensure only one video is downloaded
+            'format': 'bestaudio/best[ext=mp3]',
+            'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
+            'noplaylist': True,
         }
 
-        # Download video using yt-dlp
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            print(f"Downloading: {video_url}")
             ydl.download([video_url])
-            print("Download completed!")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        raise Exception(f"Audio download failed: {e}")
 
-def progress_hook(d):
-    """Display download progress."""
-    if d['status'] == 'downloading':
-        print(f"Downloading: {d['filename']} | {d['_percent_str']} | {d['_eta_str']} remaining")
 
-# Main function
-if __name__ == '__main__':
-    video_url = input("Enter the YouTube video URL: ").strip()
-    
-    # Get the download path and ensure it is valid
-    download_path = input("Enter the download path (default is current directory): ").strip() or '.'
-    
-    # Remove any leading/trailing quotes
-    download_path = download_path.strip('"').strip("'")
-
-    # Validate the path (optional but good practice)
-    if not os.path.exists(download_path):
-        print(f"Path does not exist. Creating directory: {download_path}")
+# Video download function
+def download_video(video_url, download_path='.'):
+    try:
         os.makedirs(download_path, exist_ok=True)
 
-    # Download the video
-    download_video(video_url, download_path)
+        ydl_opts = {
+            'format': 'best[ext=mp4]',
+            'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
+            'noplaylist': True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+
+    except Exception as e:
+        raise Exception(f"Video download failed: {e}")
+
+
+# Route for the homepage
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+# Route to handle the form submission
+@app.route('/download', methods=['POST'])
+def download():
+    video_url = request.form['video_url'].strip()
+    download_path = request.form['download_path'].strip() or '.'
+    download_type = request.form['download_type']
+
+    if not os.path.exists(download_path):
+        os.makedirs(download_path)
+
+    try:
+        if download_type == 'audio':
+            download_audio(video_url, download_path)
+        elif download_type == 'video':
+            download_video(video_url, download_path)
+
+        flash(f"{download_type.capitalize()} download completed!")
+    except Exception as e:
+        flash(f"Error: {e}")
+
+    return redirect(url_for('index'))
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
